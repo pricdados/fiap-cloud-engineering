@@ -67,6 +67,23 @@ resource "aws_glue_catalog_database" "pedeja" {
   name = "pedeja"
 }
 
+# Workgroup do Athena com o local de resultados JA configurado. Sem isso, o
+# Athena exige que o aluno configure manualmente um "query result location"
+# no console antes da primeira consulta. Com o workgroup pronto, basta
+# seleciona-lo e consultar.
+resource "aws_athena_workgroup" "pedeja" {
+  name          = "pedeja"
+  force_destroy = true
+
+  configuration {
+    enforce_workgroup_configuration    = true
+    publish_cloudwatch_metrics_enabled = true
+    result_configuration {
+      output_location = "s3://${aws_s3_bucket.datalake.bucket}/athena-results/"
+    }
+  }
+}
+
 resource "aws_glue_catalog_table" "pedidos" {
   name          = "pedidos"
   database_name = aws_glue_catalog_database.pedeja.name

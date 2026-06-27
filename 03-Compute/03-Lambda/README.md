@@ -496,7 +496,7 @@ terraform init \
 ```
 
 <a id="passo-16"></a>
-**16.1.** Aplique. Agora são 2 Lambdas (produtora + faturamento), o Kinesis Data Stream, o **Firehose** (Consumidor A), uma tabela no **Glue Data Catalog** e o data lake — 14 recursos no total:
+**16.1.** Aplique. Agora são 2 Lambdas (produtora + faturamento), o Kinesis Data Stream, o **Firehose** (Consumidor A), uma tabela no **Glue Data Catalog**, um **workgroup do Athena** e o data lake — 15 recursos no total:
 
 ```bash
 terraform apply -auto-approve
@@ -577,12 +577,14 @@ Saída esperada: as 4 cidades — `Belo Horizonte`, `Curitiba`, `Rio de Janeiro`
 <a id="passo-19"></a>
 **19.** Valide o **Consumidor A (Firehose → Parquet → Athena)**. Espere o buffer do Firehose fechar (~60s) e consulte com SQL. Este é o **go/no-go** da fase — o número tem que bater com a Parte 1 × 500:
 
+O Terraform já criou um **workgroup `pedeja`** com o local de resultados configurado — então você consulta sem precisar configurar nada. Dispare a query:
+
 ```bash
 sleep 60
 aws athena start-query-execution \
   --query-string "SELECT cidade, COUNT(*) AS pedidos, ROUND(SUM(valor),2) AS faturamento FROM pedeja.pedidos GROUP BY cidade ORDER BY faturamento DESC" \
   --query-execution-context Database=pedeja \
-  --result-configuration "OutputLocation=s3://$BUCKET/athena-results/" \
+  --work-group pedeja \
   --query "QueryExecutionId" --output text
 ```
 
@@ -608,7 +610,7 @@ Saída esperada (o faturamento é 500× o da Parte 1):
 ![](img/f3-athena.png)
 
 > [!TIP]
-> Prefere o console? Abra o **[Athena Query Editor](https://us-east-1.console.aws.amazon.com/athena/home?region=us-east-1#/query-editor)**, selecione o database `pedeja` e rode a mesma query. Na primeira vez o Athena pede para configurar um local de resultados — use `s3://<seu-bucket>/athena-results/`.
+> Prefere o console? Abra o **[Athena Query Editor](https://us-east-1.console.aws.amazon.com/athena/home?region=us-east-1#/query-editor)**, no seletor de **workgroup** (canto superior direito) escolha **`pedeja`**, selecione o database `pedeja` à esquerda e rode a mesma query. O workgroup já vem com o local de resultados configurado — você **não** precisa configurar nada.
 
 <details>
 <summary><b>⚠ Se der erro: <code>0 pedidos</code> ou tabela vazia no Athena</b></summary>
@@ -643,7 +645,7 @@ terraform destroy -auto-approve
 
 ### Checkpoint
 
-- [x] `terraform apply` criou Kinesis + Firehose + Glue + 2 Lambdas.
+- [x] `terraform apply` criou Kinesis + Firehose + Glue + workgroup Athena + 2 Lambdas.
 - [x] Os 5.000 pedidos foram publicados no stream.
 - [x] Consumidor A: o Athena lê o Parquet e o faturamento bate (R$ 298.350,00 em 5000 pedidos).
 - [x] Consumidor B: a Lambda agregou as 4 cidades — do mesmo stream.

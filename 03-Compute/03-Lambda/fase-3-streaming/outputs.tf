@@ -23,6 +23,11 @@ output "glue_database" {
   value       = aws_glue_catalog_database.pedeja.name
 }
 
+output "athena_workgroup" {
+  description = "Workgroup do Athena com o local de resultados ja configurado."
+  value       = aws_athena_workgroup.pedeja.name
+}
+
 output "athena_results" {
   description = "Prefixo S3 onde o Athena grava os resultados das queries."
   value       = "s3://${aws_s3_bucket.datalake.bucket}/athena-results/"
