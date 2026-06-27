@@ -157,8 +157,6 @@ terraform apply -auto-approve
 
 Ao final, o Terraform imprime 3 saídas (`api_url`, `bucket_datalake`, `dashboard_url`).
 
-<!-- PRINT SUGERIDO: img/f1-apply.png
-     Saida do terraform apply da Fase 1 mostrando "Apply complete! Resources: 8 added" e os 3 outputs. -->
 ![](img/f1-apply.png)
 
 **3.2.** Em vez de copiar e colar essas saídas, capture-as direto do Terraform em variáveis de ambiente — os próximos passos usam essas variáveis, então **rode na mesma pasta `fase-1-ingestao`**:
@@ -210,8 +208,6 @@ aws s3 ls s3://$BUCKET/pedidos/dt=2026-03-15/ | wc -l
 
 Saída esperada: `10`.
 
-<!-- PRINT SUGERIDO: img/f1-s3.png
-     Saida do aws s3 ls listando os 10 arquivos PED-0001.json ... PED-0010.json na particao dt=2026-03-15. -->
 ![](img/f1-s3.png)
 
 <a id="passo-6"></a>
@@ -223,8 +219,6 @@ terraform -chdir=/workspaces/fiap-cloud-engineering/03-Compute/03-Lambda/fase-1-
 
 Abra a URL impressa — ou vá direto pelo link **[CloudWatch → Dashboards → PedeJa-Fase1-Ingestao](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/PedeJa-Fase1-Ingestao)**. Observe os **4 golden signals** da Lambda e o **faturamento por cidade**.
 
-<!-- PRINT SUGERIDO: img/f1-dashboard.png
-     Dashboard PedeJa-Fase1-Ingestao mostrando Invocacoes, Duration, Errors, ConcurrentExecutions e o grafico de faturamento por cidade. Capturar a tela inteira. -->
 ![](img/f1-dashboard.png)
 
 <details>
@@ -253,7 +247,7 @@ O `valor_pedido` por cidade é uma **métrica de negócio**, emitida pela própr
 ```bash
 aws logs filter-log-events \
   --log-group-name "/aws/lambda/pedeja-ingestao" \
-  --start-time $(python3 -c "import time;print(int((time.time()-900)*1000))") \
+  --start-time $(python3 -c "import time;print(int((time.time()-3600)*1000))") \
   --filter-pattern '"pedido gravado"' \
   --query "events[0].message" --output text | head -1 | python3 -m json.tool
 ```
@@ -278,6 +272,24 @@ Saída esperada (uma linha por pedido; repare no `xray_trace_id` e no `cold_star
 <!-- PRINT SUGERIDO: img/f1-log.png
      Saida do filter-log-events mostrando o JSON do log estruturado com xray_trace_id e cold_start. -->
 ![](img/f1-log.png)
+
+<details>
+<summary><b>⚠ Se der erro: <code>Expecting value: line 1 column 1 (char 0)</code></b></summary>
+<blockquote>
+
+O `filter-log-events` não achou nenhum log na janela de tempo (o `python3 -m json.tool` recebeu texto vazio). Quase sempre é porque passou da janela ou os logs ainda não apareceram. Faça:
+
+1. Rode o **passo 4** de novo (dispara os 10 pedidos) e aguarde ~30 segundos — o CloudWatch leva alguns segundos para indexar.
+2. Repita este passo. Se ainda vier vazio, confirme que a Lambda existe e tem logs:
+
+```bash
+aws logs describe-log-streams --log-group-name "/aws/lambda/pedeja-ingestao" --order-by LastEventTime --descending --max-items 1 --query "logStreams[0].lastEventTimestamp"
+```
+
+Se isso retornar `None`, a Lambda ainda não foi invocada nenhuma vez — volte ao passo 4.
+
+</blockquote>
+</details>
 
 > [!TIP]
 > Prefere ver no console? Abra o log group direto neste link: **[CloudWatch Logs → /aws/lambda/pedeja-ingestao](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fpedeja-ingestao)** (clique no log stream mais recente para ver as linhas JSON).
