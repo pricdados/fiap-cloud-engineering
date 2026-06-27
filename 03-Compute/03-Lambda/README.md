@@ -40,6 +40,7 @@ Três arquiteturas de ingestão funcionando e comparadas com dados reais, e a in
 | 2 | [Fase 1 — Ingestão direta (Lambda → S3)](#parte-2---fase-1-ingestão-direta) | API GW → Lambda → S3. Funciona. Observe os golden signals. | [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) · [6](#passo-6) · [7](#passo-7) | ~15 min |
 | 3 | [Fase 2 — A Black Friday (SQS)](#parte-3---fase-2-a-black-friday) | O pico quebra a v1. Desacople com fila + DLQ. | [8](#passo-8) · [9](#passo-9) · [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | ~15 min |
 | 4 | [Fase 3 — Três times, um dado (Kinesis)](#parte-4---fase-3-três-times-um-dado) | A fila não distribui nem reprocessa. Evolua para streaming. | [13](#passo-13) · [14](#passo-14) · [15](#passo-15) · [16](#passo-16) · [17](#passo-17) | ~15 min |
+| | | Passos 3, 9 e 14 têm sub-passos (3.1/3.2 etc.) — clique no número para ir à parte. | | |
 | 5 | [Conclusão e decisão](#parte-5---conclusão-e-decisão) | Tabela comparativa e o documento de decisão. | [18](#passo-18) | ~5 min |
 
 > Se travou em algum passo, clique no número no mapa acima para ir direto a ele.
@@ -148,7 +149,7 @@ A integração do API Gateway com a Lambda é do tipo `AWS_PROXY`: o API Gateway
 </details>
 
 <a id="passo-3"></a>
-**3.** Aplique a infraestrutura (usamos `-auto-approve` em todos os labs para pular o "type yes"):
+**3.1.** Aplique a infraestrutura (usamos `-auto-approve` em todos os labs para pular o "type yes"):
 
 ```bash
 terraform apply -auto-approve
@@ -160,7 +161,7 @@ Ao final, o Terraform imprime 3 saídas (`api_url`, `bucket_datalake`, `dashboar
      Saida do terraform apply da Fase 1 mostrando "Apply complete! Resources: 8 added" e os 3 outputs. -->
 ![](img/f1-apply.png)
 
-Em vez de copiar e colar essas saídas, capture-as direto do Terraform em variáveis de ambiente — os próximos passos usam essas variáveis, então **rode na mesma pasta `fase-1-ingestao`**:
+**3.2.** Em vez de copiar e colar essas saídas, capture-as direto do Terraform em variáveis de ambiente — os próximos passos usam essas variáveis, então **rode na mesma pasta `fase-1-ingestao`**:
 
 ```bash
 export API=$(terraform output -raw api_url)
@@ -170,7 +171,7 @@ echo "BUCKET.: $BUCKET"
 ```
 
 > [!TIP]
-> Essas variáveis valem enquanto o terminal estiver aberto. Se você fechar o terminal ou abrir outro, rode este passo de novo (de dentro da pasta da fase) para recriá-las.
+> Essas variáveis valem enquanto o terminal estiver aberto. Se você fechar o terminal ou abrir outro, rode de novo o passo 3.2 (de dentro da pasta da fase) para recriá-las.
 
 <details>
 <summary><b>⚠ Se der erro: <code>InvalidAccessKeyId</code> ou <code>ExpiredToken</code></b></summary>
@@ -180,7 +181,7 @@ As credenciais da AWS Academy expiraram (duram 4 horas). Volte ao [Preparando Cr
 </details>
 
 <a id="passo-4"></a>
-**4.** Dispare os 10 pedidos contra a API. Este comando lê o dataset fixo e faz um `POST` por pedido, usando a variável `$API` capturada no passo 3:
+**4.** Dispare os 10 pedidos contra a API. Este comando lê o dataset fixo e faz um `POST` por pedido, usando a variável `$API` capturada no passo 3.2:
 
 ```bash
 cd /workspaces/fiap-cloud-engineering/03-Compute/03-Lambda
@@ -196,12 +197,12 @@ Saída esperada: 10 linhas como `{"status": "gravado", "s3_key": "pedidos/dt=202
 <details>
 <summary><b>⚠ Se der erro: <code>curl</code> reclama de URL vazia ou <code>$API</code> não definida</b></summary>
 <blockquote>
-Você provavelmente abriu um terminal novo (as variáveis se perdem). Volte à pasta `fase-1-ingestao` e rode de novo o passo 3 (`export API=...` / `export BUCKET=...`).
+Você provavelmente abriu um terminal novo (as variáveis se perdem). Volte à pasta `fase-1-ingestao` e rode de novo o passo 3.2 (`export API=...` / `export BUCKET=...`).
 </blockquote>
 </details>
 
 <a id="passo-5"></a>
-**5.** Confirme que os 10 pedidos chegaram ao data lake — este é o **go/no-go** da fase. Usa a variável `$BUCKET` do passo 3. Se não der 10, pare e revise antes de seguir:
+**5.** Confirme que os 10 pedidos chegaram ao data lake — este é o **go/no-go** da fase. Usa a variável `$BUCKET` do passo 3.2. Se não der 10, pare e revise antes de seguir:
 
 ```bash
 aws s3 ls s3://$BUCKET/pedidos/dt=2026-03-15/ | wc -l
@@ -304,7 +305,7 @@ terraform init \
 ```
 
 <a id="passo-9"></a>
-**9.** Aplique. Agora são **duas** Lambdas (produtora e consumidora), a fila SQS e a DLQ:
+**9.1.** Aplique. Agora são **duas** Lambdas (produtora e consumidora), a fila SQS e a DLQ:
 
 ```bash
 terraform apply -auto-approve
@@ -314,7 +315,7 @@ terraform apply -auto-approve
      Saida do terraform apply da Fase 2 com "Apply complete! Resources: 12 added" e os outputs api_url, queue_url, dashboard_url. -->
 ![](img/f2-apply.png)
 
-Capture os valores em variáveis (rode na pasta `fase-2-fila`):
+**9.2.** Capture os valores em variáveis (rode na pasta `fase-2-fila`):
 
 ```bash
 export API=$(terraform output -raw api_url)
@@ -337,7 +338,7 @@ A fila é um **buffer**: se chegam 10.000 pedidos num segundo, eles esperam na f
 </details>
 
 <a id="passo-10"></a>
-**10.** Dispare os mesmos 10 pedidos, usando a variável `$API` capturada no passo 9:
+**10.** Dispare os mesmos 10 pedidos, usando a variável `$API` capturada no passo 9.2:
 
 ```bash
 cd /workspaces/fiap-cloud-engineering/03-Compute/03-Lambda
@@ -351,7 +352,7 @@ done
 Saída esperada: 10 linhas como `{"status": "enfileirado", "pedido_id": "PED-0001"}`. Note: **`enfileirado`**, não `gravado` — o produtor respondeu antes de o S3 ser tocado. É o desacoplamento em ação.
 
 <a id="passo-11"></a>
-**11.** Aguarde alguns segundos e confirme que a consumidora processou a fila e gravou no S3 (**go/no-go**). Usa a variável `$BUCKET` do passo 9:
+**11.** Aguarde alguns segundos e confirme que a consumidora processou a fila e gravou no S3 (**go/no-go**). Usa a variável `$BUCKET` do passo 9.2:
 
 ```bash
 sleep 10
@@ -428,13 +429,13 @@ terraform init \
 ```
 
 <a id="passo-14"></a>
-**14.** Aplique. Agora são 3 Lambdas (1 produtora + 2 consumidoras) e o Kinesis Data Stream:
+**14.1.** Aplique. Agora são 3 Lambdas (1 produtora + 2 consumidoras) e o Kinesis Data Stream:
 
 ```bash
 terraform apply -auto-approve
 ```
 
-Capture os valores em variáveis (rode na pasta `fase-3-streaming`):
+**14.2.** Capture os valores em variáveis (rode na pasta `fase-3-streaming`):
 
 ```bash
 export API=$(terraform output -raw api_url)
@@ -466,7 +467,7 @@ Cada consumidor tem seu **próprio ponteiro de leitura** (iterator) no stream. O
 </details>
 
 <a id="passo-15"></a>
-**15.** Publique os mesmos 10 pedidos no stream, usando a variável `$API` do passo 14:
+**15.** Publique os mesmos 10 pedidos no stream, usando a variável `$API` do passo 14.2:
 
 ```bash
 cd /workspaces/fiap-cloud-engineering/03-Compute/03-Lambda
@@ -480,7 +481,7 @@ done
 Saída esperada: 10 linhas como `{"status": "publicado", "pedido_id": "PED-0001"}`.
 
 <a id="passo-16"></a>
-**16.** Aguarde o polling dos consumidores e valide os **dois** caminhos a partir do **mesmo** stream (usa `$BUCKET` do passo 14):
+**16.** Aguarde o polling dos consumidores e valide os **dois** caminhos a partir do **mesmo** stream (usa `$BUCKET` do passo 14.2):
 
 ```bash
 sleep 45
