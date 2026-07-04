@@ -156,27 +156,40 @@ Os 10 arquivos de pedido copiados do EFS para `s3://$BUCKET/raw/`.
 ![](img/ssm-conectar.png)
 
 <a id="passo-4"></a>
-**4.** **Dentro da sessão SSM da EC2** (não no Codespaces — é outro terminal), confira que os pedidos já foram plantados no EFS. Este é o **go/no-go** de entrada: a EC2 planta os 10 pedidos ao subir (via `user-data`), e isso leva ~1-2 min **depois** do `init.sh` terminar. Rode:
+**4.** **Dentro da sessão SSM da EC2** (não no Codespaces — é outro terminal), confirme que `/efs` está mesmo montado como EFS (e não é uma pasta comum no disco local) e que os 10 pedidos estão lá. Este é o **go/no-go** de entrada:
 
 ```bash
+df -h /efs
 ls /efs/pedidos/ | wc -l
 ```
 
-Saída esperada: `10`. Se vier `0` ou `No such file or directory`, o `user-data` ainda está rodando — **espere ~1 min e rode de novo** até dar 10 antes de seguir.
+Saída esperada: no `df -h /efs`, o tipo/origem mostra um **IP terminado em `:/`** (ex: `10.20.1.133:/`, tipo `nfs4`) — é assim que você confirma que é o EFS montado por NFS, não o disco local (que apareceria como `/dev/nvme0n1p1`). E o `ls` retorna **`10`**.
+
+> [!NOTE]
+> O `init.sh` já espera a EC2 subir e garante o mount do EFS antes de terminar. Se mesmo assim o `df -h /efs` mostrar `/dev/nvme...` (disco local) em vez do IP `nfs4`, o mount não subiu — use o bloco de recuperação abaixo antes de migrar. Migrar de um `/efs` que é disco local faria o lab "funcionar" sem nunca tocar o EFS.
 
 <details>
-<summary><b>⚠ Se der erro: <code>ls: /efs/pedidos: No such file or directory</code> mesmo após 3 min</b></summary>
+<summary><b>⚠ Se der erro: <code>df -h /efs</code> mostra disco local (<code>/dev/nvme...</code>), ou <code>ls</code> não deu 10</b></summary>
 <blockquote>
 
-O mount do EFS ou a cópia dos pedidos falhou no boot. Monte e replante manualmente na sessão SSM:
+Monte o EFS manualmente pelo **IP do mount target** (no Learner Lab o DNS `fs-xxx.efs...` costuma não resolver — por isso montamos por IP) e replante os pedidos, tudo na sessão SSM da EC2:
 
 ```bash
-FS_ID=$(aws efs describe-file-systems --query "FileSystems[?Name=='pedeja-efs-legado'].FileSystemId" --output text --region us-east-1)
-sudo mkdir -p /efs && sudo mount -t efs ${FS_ID}:/ /efs
-ls /efs/pedidos/ | wc -l
+EFS_IP=$(aws efs describe-mount-targets \
+  --file-system-id $(aws efs describe-file-systems --query "FileSystems[?Name=='pedeja-efs-legado'].FileSystemId" --output text --region us-east-1) \
+  --query "MountTargets[0].IpAddress" --output text --region us-east-1)
+sudo umount /efs 2>/dev/null
+sudo mkdir -p /efs
+sudo mount -t nfs4 -o nfsvers=4.1,hard,timeo=600,retrans=2,noresvport ${EFS_IP}:/ /efs
+sudo mkdir -p /efs/pedidos
+jq -c '.[]' /tmp/pedidos.json | while read -r p; do
+  id=$(echo "$p" | jq -r '.pedido_id')
+  echo "$p" | sudo tee /efs/pedidos/$id.json >/dev/null
+done
+df -h /efs && ls /efs/pedidos/ | wc -l
 ```
 
-Se ainda assim vier `0`, o `user-data` falhou — destrua e recrie o stack 01 (`terraform -chdir=terraform/01-storage apply -replace` não resolve o boot; use `destroy` + `init.sh`).
+Agora `df -h /efs` deve mostrar `${EFS_IP}:/` (tipo `nfs4`) e o `ls` deve dar `10`. Se `/tmp/pedidos.json` não existir (o `user-data` nem começou), espere mais 1 min; se persistir, destrua e recrie: `terraform -chdir=terraform/01-storage destroy -auto-approve` e rode o `init.sh` de novo.
 
 </blockquote>
 </details>
@@ -209,7 +222,8 @@ O `sync` também é **idempotente** — se você rodar de novo, ele só copia o 
 
 ### Checkpoint
 
-- [x] `ls /efs/pedidos/ | wc -l` retornou 10 (os pedidos foram plantados no EFS legado).
+- [x] `df -h /efs` mostrou um IP `:/` do tipo `nfs4` (confirmado: `/efs` é o EFS montado, não disco local).
+- [x] `ls /efs/pedidos/ | wc -l` retornou 10 (os pedidos estavam no EFS legado).
 - [x] `aws s3 ls s3://$BUCKET/raw/ | wc -l` retornou 10 (migração concluída).
 
 ---

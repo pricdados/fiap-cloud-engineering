@@ -109,12 +109,25 @@ resource "aws_instance" "migracao" {
 
   # Planta os pedidos no EFS. Cada pedido vira um arquivo .json, como se o
   # sistema legado tivesse gravado um arquivo por pedido no file server.
+  #
+  # Montagem via IP do mount target (nao pelo DNS fs-xxx.efs...): no Learner Lab
+  # o DNS do EFS costuma nao resolver e o fallback do amazon-efs-utils depende de
+  # botocore (ausente na AMI) — montar por IP com NFS 4.1 e a forma robusta. O
+  # `set -e` + o teste `mountpoint` garantem que, se o mount falhar, o boot NAO
+  # planta os pedidos no disco local (evita "migrar do EFS" sem tocar o EFS).
   user_data = <<-EOF
     #!/bin/bash -xe
-    yum update -y
-    yum install -y amazon-efs-utils jq
+    yum install -y nfs-utils jq
     mkdir -p /efs
-    mount -t efs ${aws_efs_file_system.legado.id}:/ /efs
+    for i in $(seq 1 30); do
+      if mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport \
+        ${aws_efs_mount_target.legado.ip_address}:/ /efs; then
+        break
+      fi
+      echo "mount target ainda nao pronto, tentativa $i; aguardando..."
+      sleep 10
+    done
+    mountpoint -q /efs  # aborta o user-data (set -e) se o EFS nao montou
     mkdir -p /efs/pedidos
     cat > /tmp/pedidos.json <<'PEDIDOS'
 ${file("${path.module}/../../dados/pedidos.json")}
@@ -127,3 +140,4 @@ PEDIDOS
     chown -R ec2-user:ec2-user /efs/pedidos
   EOF
 }
+

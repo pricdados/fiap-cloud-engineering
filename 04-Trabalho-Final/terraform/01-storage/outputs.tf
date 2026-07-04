@@ -12,3 +12,8 @@ output "efs_id" {
   description = "ID do EFS legado onde os pedidos foram plantados."
   value       = aws_efs_file_system.legado.id
 }
+
+output "efs_mount_ip" {
+  description = "IP do mount target do EFS (usado para montar via NFS por IP)."
+  value       = aws_efs_mount_target.legado.ip_address
+}
