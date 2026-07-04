@@ -119,6 +119,15 @@ echo "API.........: $API"
 > [!TIP]
 > Essas variáveis valem enquanto o terminal estiver aberto. Se fechar ou abrir outro terminal, rode o passo 2 de novo.
 
+Confirme que as duas Lambdas subiram (sanidade do provisionamento):
+
+```bash
+aws lambda list-functions \
+  --query "Functions[?starts_with(FunctionName,'pedeja-')].FunctionName" --output text
+```
+
+Saída esperada: `pedeja-processa-faturamento    pedeja-api-faturamento` (em qualquer ordem). Se faltar alguma, algum stack não aplicou — rode `bash scripts/init.sh` de novo (é idempotente).
+
 ### Checkpoint
 
 - [x] `init.sh` terminou imprimindo `BUCKET`, `INSTANCE_ID` e `API_URL`.
@@ -139,23 +148,52 @@ Os 10 arquivos de pedido copiados do EFS para `s3://$BUCKET/raw/`.
 <a id="passo-3"></a>
 **3.** Abra a sessão na EC2 pelo console. Acesse o [console do EC2](https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1#Instances:instanceState=running), selecione a instância `pedeja-migracao-instance`, clique em `Conectar`, aba `Gerenciador de sessões`, botão `Conectar`. Uma nova aba abre com o terminal da EC2.
 
+> [!NOTE]
+> Diferente da demo de Storage, aqui você **não precisa** configurar o log group `/ssm/ssh` nem as preferências do Session Manager — este trabalho não audita a sessão. Conecte direto.
+
 <!-- PRINT SUGERIDO: img/ssm-conectar.png
      Aba "Gerenciador de sessões" com a pedeja-migracao-instance selecionada e o botão Conectar. -->
 ![](img/ssm-conectar.png)
 
 <a id="passo-4"></a>
-**4.** **Dentro da sessão SSM da EC2**, confira que os pedidos estão no EFS legado e migre para o S3. O bucket é sempre `pedeja-datalake-<sua-conta>` — o comando abaixo monta o nome sozinho:
+**4.** **Dentro da sessão SSM da EC2** (não no Codespaces — é outro terminal), confira que os pedidos já foram plantados no EFS. Este é o **go/no-go** de entrada: a EC2 planta os 10 pedidos ao subir (via `user-data`), e isso leva ~1-2 min **depois** do `init.sh` terminar. Rode:
+
+```bash
+ls /efs/pedidos/ | wc -l
+```
+
+Saída esperada: `10`. Se vier `0` ou `No such file or directory`, o `user-data` ainda está rodando — **espere ~1 min e rode de novo** até dar 10 antes de seguir.
+
+<details>
+<summary><b>⚠ Se der erro: <code>ls: /efs/pedidos: No such file or directory</code> mesmo após 3 min</b></summary>
+<blockquote>
+
+O mount do EFS ou a cópia dos pedidos falhou no boot. Monte e replante manualmente na sessão SSM:
+
+```bash
+FS_ID=$(aws efs describe-file-systems --query "FileSystems[?Name=='pedeja-efs-legado'].FileSystemId" --output text --region us-east-1)
+sudo mkdir -p /efs && sudo mount -t efs ${FS_ID}:/ /efs
+ls /efs/pedidos/ | wc -l
+```
+
+Se ainda assim vier `0`, o `user-data` falhou — destrua e recrie o stack 01 (`terraform -chdir=terraform/01-storage apply -replace` não resolve o boot; use `destroy` + `init.sh`).
+
+</blockquote>
+</details>
+
+<a id="passo-5"></a>
+**5.** **Ainda na sessão SSM da EC2**, migre os pedidos do EFS legado para o data lake S3. O bucket é sempre `pedeja-datalake-<sua-conta>` — o comando monta o nome sozinho (a variável do passo 2 não existe aqui, pois este é outro terminal):
 
 ```bash
 BUCKET="pedeja-datalake-$(aws sts get-caller-identity --query Account --output text)"
-ls /efs/pedidos/ | wc -l
 aws s3 sync /efs/pedidos s3://$BUCKET/raw/ --region us-east-1
+aws s3 ls s3://$BUCKET/raw/ --region us-east-1 | wc -l
 ```
 
-Saída esperada: `10` (arquivos no EFS), seguido de 10 linhas `upload: ... to s3://.../raw/PED-000X.json`.
+Saída esperada: 10 linhas `upload: ... to s3://.../raw/PED-000X.json`, e ao final `10` (o **go/no-go** da migração). Se não deu 10, espere alguns segundos e rode o `sync` de novo.
 
 <!-- PRINT SUGERIDO: img/migracao.png
-     Saída do aws s3 sync mostrando os 10 uploads para raw/. -->
+     Saída do aws s3 sync mostrando os 10 uploads para raw/ e o "10" final. -->
 ![](img/migracao.png)
 
 <details>
@@ -169,18 +207,9 @@ O `sync` também é **idempotente** — se você rodar de novo, ele só copia o 
 </blockquote>
 </details>
 
-<a id="passo-5"></a>
-**5.** Ainda na sessão SSM, confirme que os 10 objetos chegaram ao S3 — este é o **go/no-go** do bloco:
-
-```bash
-aws s3 ls s3://$BUCKET/raw/ --region us-east-1 | wc -l
-```
-
-Saída esperada: `10`. Se não deu 10, reveja o passo 4 antes de seguir.
-
 ### Checkpoint
 
-- [x] `ls /efs/pedidos/ | wc -l` retornou 10 (os pedidos estavam no EFS legado).
+- [x] `ls /efs/pedidos/ | wc -l` retornou 10 (os pedidos foram plantados no EFS legado).
 - [x] `aws s3 ls s3://$BUCKET/raw/ | wc -l` retornou 10 (migração concluída).
 
 ---
@@ -211,7 +240,7 @@ Leia o arquivo inteiro. Tudo está pronto — imports, Powertools, `ler_pedidos_
 > O resultado precisa ser determinístico: os 10 pedidos são fixos, então o faturamento por cidade é sempre o mesmo. Você valida contra o número conhecido no passo 8. Se der diferente, o bug está na sua agregação.
 
 <a id="passo-8"></a>
-**8.** Reaplique **só o stack da Lambda de processamento** (isso reempacota o seu código) e invoque a função. O Terraform detecta que o `handler.py` mudou e atualiza a Lambda:
+**8.** Reaplique **só o stack da Lambda de processamento** e invoque a função. O `terraform apply` reempacota o `handler.py` (o hash do zip muda quando você edita o código) e atualiza a Lambda:
 
 ```bash
 cd /workspaces/fiap-cloud-engineering/04-Trabalho-Final
@@ -223,6 +252,13 @@ aws s3 cp s3://$BUCKET/resumo/faturamento.json -
 ```
 
 Saída esperada da invocação: `{"status": "ok", "cidades": 4, "s3_key": "resumo/faturamento.json"}`.
+
+> [!NOTE]
+> Se o `apply` disser **`No changes`** mas você editou o código, force o reempacotamento apagando o zip antigo e reaplicando:
+> ```bash
+> rm -f terraform/02-processa/build/processa.zip
+> terraform -chdir=terraform/02-processa apply -auto-approve
+> ```
 
 O `resumo/faturamento.json` deve conter (o faturamento é determinístico — **tem que bater**):
 
@@ -238,6 +274,15 @@ O `resumo/faturamento.json` deve conter (o faturamento é determinístico — **
      Terminal mostrando o resultado da invocação e o conteúdo do faturamento.json com os 4 valores. -->
 ![](img/processa.png)
 
+Confirme que a Lambda roda mesmo em **Graviton** — é uma das decisões que você defende no `DECISION.md`:
+
+```bash
+aws lambda get-function-configuration --function-name pedeja-processa-faturamento \
+  --query "Architectures" --output text
+```
+
+Saída esperada: `arm64`.
+
 <details>
 <summary><b>⚠ Se der erro: o faturamento não bate ou vem <code>cidades: 0</code></b></summary>
 <blockquote>
@@ -245,8 +290,9 @@ O `resumo/faturamento.json` deve conter (o faturamento é determinístico — **
 - `cidades: 0` → seu `resumo` ficou vazio. Confirme que você percorreu `pedidos` e preencheu o dicionário no formato do comentário.
 - Faturamento errado → cheque se está somando `p["valor"]` (e não contando) e arredondando com `round(x, 2)`.
 - `KeyError` → confirme que usou as chaves `"cidade"` e `"valor"` (é assim que cada pedido vem).
+- `apply` disse `No changes` → use o bloco `rm -f ...build/processa.zip` do `[!NOTE]` acima e reaplique.
 
-Depois de corrigir, rode o passo 8 de novo (o `terraform apply` reempacota o código).
+Depois de corrigir, rode o passo 8 de novo.
 
 </blockquote>
 </details>
@@ -255,6 +301,7 @@ Depois de corrigir, rode o passo 8 de novo (o `terraform apply` reempacota o có
 
 - [x] Você completou o `TODO` do `lambdas/processa/handler.py`.
 - [x] A invocação retornou `status: ok` e `cidades: 4`.
+- [x] `get-function-configuration` confirmou `arm64` (Graviton).
 - [x] O `faturamento.json` no S3 bate o total de **R$ 596,70** em 10 pedidos.
 
 ---
@@ -290,7 +337,13 @@ terraform -chdir=terraform/03-api apply -auto-approve
 curl -s "$API/faturamento" | python3 -m json.tool
 ```
 
-Saída esperada: o mesmo JSON de faturamento por cidade do passo 8, agora servido pela API.
+Saída esperada: o mesmo JSON de faturamento por cidade do passo 8 (as **4 cidades**, total R$ 596,70), agora servido pela API.
+
+> [!IMPORTANT]
+> Se o `curl` retornar `{}` (vazio) com sucesso, **não terminou**: significa que o `resumo/faturamento.json` está vazio — seu TODO do **bloco 2** (passo 7) não agregou nada. Volte ao passo 8, confirme que a invocação deu `cidades: 4`, e só então consulte a API. Um `{}` não é a resposta certa.
+
+> [!NOTE]
+> Se o `apply` disser **`No changes`** mas você editou o handler, force o reempacotamento: `rm -f terraform/03-api/build/api.zip && terraform -chdir=terraform/03-api apply -auto-approve`.
 
 <!-- PRINT SUGERIDO: img/api.png
      Terminal mostrando o curl para $API/faturamento e o JSON de faturamento por cidade retornado. -->
@@ -335,8 +388,9 @@ O `DECISION.md` te pede para defender: **S3 vs EFS**, **Graviton**, **Lambda vs 
 ```bash
 cd /workspaces/fiap-cloud-engineering/04-Trabalho-Final
 mkdir -p entrega/prints
-cp lambdas/processa/handler.py entrega/
-cp lambdas/api/handler.py entrega/
+# Os dois handlers se chamam handler.py — renomeie ao copiar para nao colidir:
+cp lambdas/processa/handler.py entrega/processa_handler.py
+cp lambdas/api/handler.py      entrega/api_handler.py
 cp DECISION.md entrega/
 # copie para entrega/prints/ os prints que voce salvou (migracao, processa, api)
 zip -r trabalho-final.zip entrega/
@@ -346,17 +400,14 @@ A estrutura do zip deve ficar assim:
 
 ```
 entrega/
-├── handler.py          (processa — com seu miolo)
-├── handler.py          (api — com seu miolo)  [renomeie para nao colidir, ex: api_handler.py]
+├── processa_handler.py   (bloco 2 — com seu miolo de agregacao)
+├── api_handler.py        (bloco 3 — com seu miolo de leitura do S3)
 ├── DECISION.md
 └── prints/
     ├── migracao.png
     ├── processa.png
     └── api.png
 ```
-
-> [!NOTE]
-> Renomeie um dos `handler.py` ao copiar (ex: `processa_handler.py` e `api_handler.py`) para não sobrescrever um com o outro na pasta `entrega/`.
 
 <a id="passo-14"></a>
 **14.** Destrua toda a infraestrutura. **Este passo não é opcional.**

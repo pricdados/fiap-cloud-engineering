@@ -34,7 +34,15 @@ def handler(event, context):
     # JSON para um dict chamado `faturamento`.
     # Dica: use s3.get_object(Bucket=..., Key=...)["Body"].read() e json.loads.
     # Se o objeto ainda nao existe (o bloco 2 nao rodou), o get_object lanca
-    # botocore.exceptions.ClientError — trate devolvendo resposta(404, {...}).
+    # a excecao s3.exceptions.NoSuchKey — capture-a e devolva resposta(404, ...)
+    # com uma mensagem clara (assim a API nao quebra com erro 500).
+    #
+    # Esqueleto (complete os ...):
+    #     try:
+    #         corpo = s3.get_object(Bucket=..., Key=...)["Body"].read()
+    #         faturamento = json.loads(corpo)
+    #     except s3.exceptions.NoSuchKey:
+    #         return resposta(404, {"erro": "resumo ainda nao gerado; rode o bloco 2"})
     #
     # Substitua a linha abaixo pela sua leitura:
     faturamento = {}

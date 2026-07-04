@@ -23,9 +23,11 @@ agregação? O que você mediria para confirmar?)
 
 ## Lambda vs. Fargate: por que Lambda para servir a API?
 
-(Você também viu ECS/Fargate. Para esta API de faturamento — tráfego baixo e
-esporádico, resposta rápida — por que Lambda e não um container no Fargate? Em
-que cenário a decisão se inverteria?)
+(Você também viu ECS/Fargate na demo 03.2. Para esta API de faturamento, pense
+no **perfil de tráfego**: consultas esporádicas, resposta rápida, nada rodando
+entre uma chamada e outra. Por que Lambda — que cobra por invocação e escala a
+zero — se encaixa melhor que um container Fargate ligado 24/7 aqui? E em que
+cenário de tráfego a decisão se inverteria a favor do Fargate?)
 
 ## Consequências
 
