@@ -1,0 +1,33 @@
+# Decisão de arquitetura — Modernização da ingestão de pedidos PedeJá
+
+> Preencha cada seção em poucas linhas, como se explicasse para a Marina (líder de
+> Dados). O que vale é o **porquê** — defenda suas escolhas com o que você mediu e
+> viu nas demos, não com opinião.
+
+## Contexto
+
+(Qual era a situação inicial — os pedidos no EFS legado — e o que a modernização
+resolve? Qual o volume de dados hoje?)
+
+## Storage: por que S3 e não continuar no EFS?
+
+(Você migrou os pedidos do EFS para o S3. Com base na demo de Storage, quando o
+EFS é a escolha certa e quando o S3 é melhor? Por que, para um data lake de
+pedidos consultado por uma API, o S3 faz mais sentido?)
+
+## Compute: por que Lambda em Graviton?
+
+(A Lambda de processamento roda em `arm64` (Graviton). Com base na demo x86 vs
+Graviton, por que Graviton é uma escolha razoável para esse workload de
+agregação? O que você mediria para confirmar?)
+
+## Lambda vs. Fargate: por que Lambda para servir a API?
+
+(Você também viu ECS/Fargate. Para esta API de faturamento — tráfego baixo e
+esporádico, resposta rápida — por que Lambda e não um container no Fargate? Em
+que cenário a decisão se inverteria?)
+
+## Consequências
+
+(O que essa arquitetura facilita e o que ela dificulta? O que você faria diferente
+se o volume de pedidos crescesse 1000×?)

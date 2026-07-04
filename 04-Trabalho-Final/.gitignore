@@ -1,0 +1,11 @@
+# Artefatos Terraform e build das Lambdas (nao versionar)
+**/build/
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+# Documento e entrega que o aluno gera localmente
+DECISION.md
+entrega/
+*.zip

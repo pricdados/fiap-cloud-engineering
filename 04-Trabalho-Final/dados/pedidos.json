@@ -1,0 +1,12 @@
+[
+  {"pedido_id": "PED-0001", "cliente": "Ana Souza",      "restaurante": "Sushi Central", "item": "Combinado 20 pecas", "valor": 89.90,  "cidade": "Sao Paulo",     "event_time": "2026-03-15T19:05:00"},
+  {"pedido_id": "PED-0002", "cliente": "Bruno Lima",     "restaurante": "Pizza Prime",   "item": "Pizza Calabresa",   "valor": 54.00,  "cidade": "Sao Paulo",     "event_time": "2026-03-15T19:07:30"},
+  {"pedido_id": "PED-0003", "cliente": "Carla Dias",     "restaurante": "Burger House",  "item": "Combo Duplo",       "valor": 38.50,  "cidade": "Rio de Janeiro","event_time": "2026-03-15T19:10:00"},
+  {"pedido_id": "PED-0004", "cliente": "Diego Alves",    "restaurante": "Sushi Central", "item": "Temaki Salmao",     "valor": 32.00,  "cidade": "Curitiba",      "event_time": "2026-03-15T19:12:45"},
+  {"pedido_id": "PED-0005", "cliente": "Elaine Castro",  "restaurante": "Pizza Prime",   "item": "Pizza Marguerita",  "valor": 49.90,  "cidade": "Sao Paulo",     "event_time": "2026-03-15T19:15:10"},
+  {"pedido_id": "PED-0006", "cliente": "Felipe Rocha",   "restaurante": "Burger House",  "item": "Combo Triplo",      "valor": 45.00,  "cidade": "Belo Horizonte","event_time": "2026-03-15T19:18:00"},
+  {"pedido_id": "PED-0007", "cliente": "Gabriela Nunes", "restaurante": "Sushi Central", "item": "Combinado 40 pecas","valor": 159.90, "cidade": "Rio de Janeiro","event_time": "2026-03-15T19:20:25"},
+  {"pedido_id": "PED-0008", "cliente": "Heitor Pires",   "restaurante": "Pizza Prime",   "item": "Pizza Portuguesa",  "valor": 58.00,  "cidade": "Curitiba",      "event_time": "2026-03-15T19:23:50"},
+  {"pedido_id": "PED-0009", "cliente": "Isabela Ramos",  "restaurante": "Burger House",  "item": "Combo Veggie",      "valor": 41.50,  "cidade": "Sao Paulo",     "event_time": "2026-03-15T19:26:15"},
+  {"pedido_id": "PED-0010", "cliente": "Joao Vitor",     "restaurante": "Sushi Central", "item": "Hot Roll",          "valor": 28.00,  "cidade": "Belo Horizonte","event_time": "2026-03-15T19:29:40"}
+]
