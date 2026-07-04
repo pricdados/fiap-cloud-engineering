@@ -28,6 +28,8 @@ Repositório de laboratórios práticos da disciplina. Cada lab é um passo a pa
 | 03.3 | [Compute — Serverless: Lambda orientada a eventos](./03-Compute/03-Lambda/README.md) | Pipeline de ingestão de dados em 3 fases (Lambda+S3 → SQS → Kinesis) com observabilidade. | ~50-60 min |
 | 04 | [**Trabalho Final** — Modernizando a ingestão (EFS → S3 → Lambda → API)](./04-Trabalho-Final/README.md) | Amarra as 4 demos numa jornada end-to-end: migra do EFS para o S3, processa com Lambda Graviton e serve por uma API. Você completa o miolo do código. | ~2 h |
 
+> Os módulos **01 a 03** são demos guiadas, para aprender cada serviço. O **04 - Trabalho Final** é a síntese: você reusa o que praticou nas demos para resolver um problema de negócio de ponta a ponta, montando os blocos e completando só o miolo do código. Faça-o depois de concluir as demos.
+
 > [!NOTE]
 > Os tempos acima são de execução pura. Some o tempo de leitura, observação dos resultados e reflexão — na prática, um lab leva de 2 a 4 vezes o tempo listado.
 
