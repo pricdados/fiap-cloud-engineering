@@ -331,7 +331,13 @@ Saída esperada da invocação: `{"status": "ok", "cidades": 4, "s3_key": "resum
 > terraform -chdir=terraform/02-processa apply -auto-approve
 > ```
 
-O `resumo/faturamento.json` deve conter (o faturamento é determinístico — **tem que bater**). As cidades aparecem **sem acento**, exatamente como vêm no dataset (`Sao Paulo`) — sua saída deve ser idêntica a esta:
+O `aws s3 cp ... -` imprime o **JSON cru** do `faturamento.json` — uma linha só, sem quebras. **É esse o formato certo**; não espere uma tabela na tela. Algo como:
+
+```json
+{"Sao Paulo": {"pedidos": 4, "faturamento": 235.3}, "Rio de Janeiro": {"pedidos": 2, "faturamento": 198.4}, "Curitiba": {"pedidos": 2, "faturamento": 90.0}, "Belo Horizonte": {"pedidos": 2, "faturamento": 73.0}}
+```
+
+A tabela abaixo **não é o que aparece na tela** — é só a sua **conferência dos números**: bata cada cidade do seu JSON contra ela. O faturamento é determinístico (**tem que bater**), e as cidades vêm **sem acento**, exatamente como no dataset (`Sao Paulo`).
 
 | Cidade | Pedidos | Faturamento |
 |--------|---------|-------------|
