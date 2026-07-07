@@ -88,6 +88,9 @@ cd /workspaces/fiap-cloud-engineering/04-Trabalho-Final
 bash scripts/init.sh
 ```
 
+> [!TIP]
+> **Pode rodar quantas vezes precisar.** O `init.sh` é idempotente: ele só cria o que ainda não existe e reaproveita o que já subiu. Se algo falhar no meio (mount do EFS, timeout, rede), é só rodar `bash scripts/init.sh` de novo — ele retoma de onde parou, não recria a EC2 nem o EFS do zero.
+
 O script leva ~8-10 min (a EC2 e o EFS demoram para subir). Ao final, ele imprime três linhas:
 
 ```
@@ -324,6 +327,9 @@ aws s3 cp s3://$BUCKET/resumo/faturamento.json -
 
 Saída esperada da invocação: `{"status": "ok", "cidades": 4, "s3_key": "resumo/faturamento.json"}`.
 
+> [!TIP]
+> **Editou o `handler.py`? Rode de novo, à vontade.** Esse ciclo `apply` → `invoke` é feito para repetir: cada vez que você muda o código, roda `terraform apply` (reempacota e atualiza a Lambda) e invoca outra vez. Errou, corrigiu, testou de novo — quantas vezes precisar, sem limpar nada antes.
+
 > [!NOTE]
 > Se o `apply` disser **`No changes`** mas você editou o código, force o reempacotamento apagando o zip antigo e reaplicando:
 > ```bash
@@ -357,6 +363,30 @@ aws lambda get-function-configuration --function-name pedeja-processa-faturament
 ```
 
 Saída esperada: `arm64`.
+
+<details>
+<summary>💡 <b>A invocação deu erro (<code>FunctionError</code>, <code>{}</code> ou nada gravado)? Veja o log da Lambda no CloudWatch</b></summary>
+<blockquote>
+
+Toda Lambda escreve seus `print`/`log` e o **traceback de qualquer exceção** no CloudWatch Logs. O *porquê* do erro é seu trabalho — mas **enxergar** a mensagem não pode ser o problema. Cada função tem um **log group** (`/aws/lambda/<nome-da-função>`); dentro dele há vários **log streams** (um por "container" que a AWS levantou), e o traceback da sua última invocação está no stream **mais recente**.
+
+O jeito mais rápido é não caçar stream nenhum — deixe a CLI seguir o log group inteiro em tempo real e invoque de novo em outro terminal:
+
+```bash
+# terminal 1: fica seguindo os logs mais recentes (Ctrl-C para sair)
+aws logs tail /aws/lambda/pedeja-processa-faturamento --follow --since 10m --format short
+
+# terminal 2 (ou o mesmo, sem --follow): dispara a Lambda de novo
+aws lambda invoke --function-name pedeja-processa-faturamento \
+  --cli-binary-format raw-in-base64-out --payload '{}' /tmp/saida.json
+```
+
+Procure a linha `[ERROR]` ou `Traceback (most recent call last)` — ela aponta o arquivo e a linha exata que estourou.
+
+**Prefere o console?** Abra **CloudWatch → Log groups → `/aws/lambda/pedeja-processa-faturamento`** e clique no log stream do topo (o de horário mais recente). É lá que está o traceback da sua última execução.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>⚠ Se der erro: o faturamento não bate ou vem <code>cidades: 0</code></b></summary>
@@ -414,6 +444,9 @@ curl -s "$API/faturamento" | python3 -m json.tool
 
 Saída esperada: o mesmo JSON de faturamento por cidade do passo 8 (as **4 cidades**, total R$ 596,70), agora servido pela API.
 
+> [!TIP]
+> **Mesma regra do passo 8: editou o handler, roda de novo.** `terraform apply` reempacota e atualiza a Lambda da API; o `curl` consulta o resultado. Ajuste o código, reaplique, consulte — repita quantas vezes precisar.
+
 > [!IMPORTANT]
 > Se o `curl` retornar `{}` (vazio) com sucesso, **não terminou**: significa que o `resumo/faturamento.json` está vazio — seu TODO do **bloco 2** (passo 7) não agregou nada. Volte ao passo 8, confirme que a invocação deu `cidades: 4`, e só então consulte a API. Um `{}` não é a resposta certa.
 
@@ -421,6 +454,25 @@ Saída esperada: o mesmo JSON de faturamento por cidade do passo 8 (as **4 cidad
 > Se o `apply` disser **`No changes`** mas você editou o handler, force o reempacotamento: `rm -f terraform/03-api/build/api.zip && terraform -chdir=terraform/03-api apply -auto-approve`.
 
 > 📸 **Print obrigatório** — salve como `prints/05-api-faturamento.png`. Capture o terminal com o `curl` para `$API/faturamento` e o JSON de faturamento por cidade retornado pela API.
+
+<details>
+<summary>💡 <b>O <code>curl</code> devolveu erro 5xx, HTML de erro ou <code>Internal Server Error</code>? Veja o log da API no CloudWatch</b></summary>
+<blockquote>
+
+Quando a Lambda da API estoura uma exceção, o API Gateway responde `5xx` e o traceback fica no CloudWatch Logs da função — **não** no `curl`. Mesma ideia do passo 8: siga o log group em tempo real e refaça a chamada:
+
+```bash
+# terminal 1: segue os logs mais recentes da Lambda da API (Ctrl-C para sair)
+aws logs tail /aws/lambda/pedeja-api-faturamento --follow --since 10m --format short
+
+# terminal 2 (ou o mesmo, sem --follow): chama a API de novo
+curl -s "$API/faturamento" | python3 -m json.tool
+```
+
+A linha `[ERROR]` / `Traceback (most recent call last)` mostra o arquivo e a linha que falhou. No console é o mesmo caminho: **CloudWatch → Log groups → `/aws/lambda/pedeja-api-faturamento`** → log stream do topo (o mais recente).
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>⚠ Se der erro: <code>{"erro": "resumo ainda nao gerado; rode o bloco 2"}</code> (404)</b></summary>
