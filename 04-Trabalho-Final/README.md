@@ -508,33 +508,41 @@ code DECISION.md
 O `DECISION.md` te pede para defender: **S3 vs EFS**, **Graviton**, **Lambda vs Fargate** e as consequências. Poucas linhas por seção, mas com o **porquê** — é o que separa júnior de sênior.
 
 <a id="passo-13"></a>
-**13.** Monte o **zip de entrega** com o código que você completou, o `DECISION.md` e os prints que tirou ao longo do caminho. Coloque seus prints numa pasta `prints/` antes de compactar:
+**13.** Monte o **zip de entrega** com o código que você completou, o `DECISION.md` e os prints que tirou ao longo do caminho.
+
+> [!IMPORTANT]
+> Repare que suas coisas estão em **dois lugares diferentes**: o **código e o `DECISION.md` vivem no Codespaces** (na nuvem), mas os **prints são arquivos `.png` na sua máquina local** — você os salvou com print de tela, o Codespaces nunca os viu. Por isso a montagem tem **duas partes**: primeiro empacote o código no Codespaces e **baixe** esse zip; depois, **na sua máquina**, junte os prints.
+
+**Parte A — no Codespaces:** empacote o código e o `DECISION.md`:
 
 ```bash
 cd /workspaces/fiap-cloud-engineering/04-Trabalho-Final
-mkdir -p entrega/prints
+mkdir -p entrega
 # Os dois handlers se chamam handler.py — renomeie ao copiar para nao colidir:
 cp lambdas/processa/handler.py entrega/processa_handler.py
 cp lambdas/api/handler.py      entrega/api_handler.py
 cp DECISION.md entrega/
-# copie para entrega/prints/ os 5 prints obrigatorios que voce salvou ao longo do lab
 zip -r trabalho-final.zip entrega/
 ```
 
-A estrutura do zip deve ficar assim — os 5 prints são os que o README pediu em cada bloco (marcados com 📸 **Print obrigatório**):
+Agora **baixe o zip para a sua máquina**: no painel de arquivos do Codespaces (à esquerda), clique com o botão direito em `trabalho-final.zip` → **Download**. Ele vai para a pasta de downloads do seu computador.
+
+**Parte B — na sua máquina local:** descompacte o zip que você baixou, crie a pasta `prints/` dentro de `entrega/`, mova para lá os **5 prints** que você tirou, e recompacte. A estrutura final tem que ficar assim (os 5 prints são os que o README pediu em cada bloco, marcados com 📸 **Print obrigatório**):
 
 ```
 entrega/
-├── processa_handler.py   (bloco 2 — com seu miolo de agregacao)
-├── api_handler.py        (bloco 3 — com seu miolo de leitura do S3)
-├── DECISION.md
-└── prints/
+├── processa_handler.py   (bloco 2 — com seu miolo de agregacao, veio do Codespaces)
+├── api_handler.py        (bloco 3 — com seu miolo de leitura do S3, veio do Codespaces)
+├── DECISION.md           (veio do Codespaces)
+└── prints/               (voce cria aqui, na maquina local)
     ├── 01-provisionamento.png       (Bloco 0 — Apply complete + saidas do init.sh)
     ├── 02-ssm-conectar.png          (Bloco 1 — sessao SSM na pedeja-migracao-instance)
     ├── 03-migracao-efs-s3.png       (Bloco 1 — aws s3 sync com os 10 uploads)
     ├── 04-processa-faturamento.png  (Bloco 2 — invocacao + faturamento.json)
     └── 05-api-faturamento.png       (Bloco 3 — curl na API + JSON retornado)
 ```
+
+O `trabalho-final.zip` final (com código + `DECISION.md` + os 5 prints) é o que você entrega.
 
 <a id="passo-14"></a>
 **14.** Destrua toda a infraestrutura. **Este passo não é opcional.**
